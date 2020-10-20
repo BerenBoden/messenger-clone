@@ -2,22 +2,39 @@ import React, { useEffect, useState } from 'react';
 import './App.css';
 import { Button, FormControl, InputLabel, Input } from '@material-ui/core'
 import Message from './Message';
-import db from './firebase';
-import firebase from 'firebase'
 import FlipMove from 'react-flip-move'
 import SendIcon from '@material-ui/icons/Send'
 import IconButton from '@material-ui/core/IconButton'
+import axios from './axios'
+import Pusher from 'pusher-js'
+
+const pusher = new Pusher('421b7a2b91442e23988b', {
+  cluster: 'ap1'
+});
 
 function App() {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([])
   const [username, setUsername] = useState('')
 
-  useEffect(() => {
-    db.collection('messages').orderBy('timestamp', 'desc').onSnapshot(snapshot => {
-      setMessages(snapshot.docs.map(doc => ({ id: doc.id, message: doc.data() })))
+  const sync = async () => {
+    await axios.get('/retrieve/conversation')
+    .then(res => {
+      console.log(res.data);
+      setMessages(res.data)
     })
+  }
+
+  useEffect(() => {
+    sync()
   }, [])
+
+  useEffect(() => {
+    const channel = pusher.subscribe('messages');
+    channel.bind('newMessage', function (data) {
+      sync()
+    })
+  }, [username])
 
   useEffect(() => {
     setUsername(prompt('Please enter your name'))
@@ -26,10 +43,10 @@ function App() {
   const sendMessage = (e) => {
     e.preventDefault()
 
-    db.collection('messages').add({
-      message: input,
+    axios.post('/save/message', {
       username: username,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      message: input,
+      timestamp: Date.now()
     })
 
     setInput('')
@@ -51,8 +68,8 @@ function App() {
 
       <FlipMove>
         {
-          messages.map(({ id, message }) => (
-            <Message key={id} message={message} username={username} />
+          messages.map(message => (
+            <Message key={message._id} message={message} username={username} />
           ))
         }
       </FlipMove>
